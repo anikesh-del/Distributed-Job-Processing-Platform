@@ -27,20 +27,20 @@ It is the shared technical reference for both developers and AI coding assistant
 
 ## 3. Current Project State
 
-Development day: NOT STARTED
+Development day: Day 1
 
-Overall project status: NOT STARTED
+Overall project status: IN PROGRESS
 
-Last updated: YYYY-MM-DD
+Last updated: 2026-11-19
 
 ### Subsystem Status
 
 | Subsystem | Status | Notes |
 |---|---|---|
-| Project setup | NOT STARTED | |
+| Project setup | IN PROGRESS | Directory structure and base config created |
 | Docker Compose | NOT STARTED | |
-| Express API | NOT STARTED | |
-| TypeScript configuration | NOT STARTED | |
+| Express API | IMPLEMENTED | App factory, error handling, health endpoint, graceful shutdown |
+| TypeScript configuration | IMPLEMENTED | tsconfig.base.json and api/tsconfig.json strict mode |
 | PostgreSQL | NOT STARTED | |
 | Prisma schema | NOT STARTED | |
 | Authentication | NOT STARTED | |
@@ -177,6 +177,7 @@ Record only implemented and agreed API contracts.
 
 | Method | Endpoint | Purpose | Status |
 |---|---|---|---|
+| GET | /health | API health & uptime check | IMPLEMENTED |
 | POST | /auth/signup | User registration | NOT STARTED |
 | POST | /auth/login | User login | NOT STARTED |
 | POST | /jobs | Submit a job | NOT STARTED |
@@ -185,13 +186,22 @@ Record only implemented and agreed API contracts.
 | GET | /jobs/:id/attempts | Retrieve attempts | NOT STARTED |
 
 For each implemented endpoint, document:
-- Authentication requirement.
-- Request body.
-- Headers.
-- Validation rules.
-- Successful response.
-- Error responses.
-- Relevant tests.
+
+#### GET /health
+- Authentication requirement: None (public).
+- Request body: None.
+- Headers: None required.
+- Validation rules: None.
+- Successful response (200 OK):
+  ```json
+  {
+    "status": "ok",
+    "timestamp": "2026-11-19T14:42:24.717Z",
+    "uptime": 2.0769553
+  }
+  ```
+- Error responses: None expected.
+- Relevant tests: Live HTTP probe verifying 200 OK and JSON structure.
 
 ## 8. Database Schema State
 
@@ -293,19 +303,29 @@ Record actual known problems.
 
 ## 13. Latest Verified System State
 
-Last verified date:
+Last verified date: 2026-11-19
 
-Development day:
+Development day: Day 1
 
 What currently works:
+- Express API server boots cleanly with `dist/index.js`.
+- `GET /health` endpoint returns 200 OK with status, timestamp, and uptime.
+- Unhandled routes return structured 404 JSON response.
+- TypeScript compiler (`tsc`) compiles cleanly with strict typechecking enabled.
+- Graceful shutdown handles `SIGTERM` and `SIGINT`.
 
 What does not work:
+- No database connection or job submission routes yet (scheduled for subsequent Day 1 / Day 2 tasks).
 
 Tests executed:
+- `npm run typecheck` (`tsc --noEmit`)
+- `npm run build` (`tsc`)
+- Live HTTP probe: `GET http://127.0.0.1:3000/health` (HTTP 200 OK)
+- Live HTTP probe: `GET http://127.0.0.1:3000/unknown-route` (HTTP 404)
 
-Outstanding issues:
+Outstanding issues: None.
 
-Latest integrated commit:
+Latest integrated commit: Working tree uncommitted (Day 1 initial skeleton).
 
 Only include facts verified against the current integrated codebase.
 
@@ -313,5 +333,6 @@ Only include facts verified against the current integrated codebase.
 
 | Date | Decision ID / Change | Description | Approved By |
 |---|---|---|---|
-| YYYY-MM-DD | Initial setup | Created technical decision document | Both developers |
+| 2026-11-19 | Initial setup | Created technical decision document | Both developers |
+| 2026-11-19 | API Skeleton | Implemented Express + TypeScript API skeleton, health route, error handlers, and base TS configs | Developer 1 |
 
