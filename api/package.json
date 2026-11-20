@@ -11,12 +11,15 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev"
+    "db:migrate": "prisma migrate dev",
+    "poc:ratelimit": "tsx src/services/verify-rate-limiter.poc.ts",
+    "test:ratelimit": "tsx src/services/rate-limiter.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "ioredis": "^6.0.0",
     "pino": "^10.4.0",
     "zod": "^4.6.7"
   },

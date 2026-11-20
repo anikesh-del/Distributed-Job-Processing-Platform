@@ -37,7 +37,6 @@ Last updated: YYYY-MM-DD
 
 | Subsystem | Status | Notes |
 |---|---|---|
-<<<<<<< HEAD
 | Project setup | IN PROGRESS | Express API, environment validation, and Prisma configured |
 | Docker Compose | IMPLEMENTED | Stack configured: PostgreSQL, RabbitMQ, Redis, Prometheus, Grafana |
 | Express API | IN PROGRESS | Day 1 skeleton, health endpoint, graceful shutdown |
@@ -49,32 +48,17 @@ Last updated: YYYY-MM-DD
 | Job retrieval API | NOT STARTED | |
 | Transactional outbox | NOT STARTED | |
 | RabbitMQ publisher | NOT STARTED | |
->>>>>>> origin/main
-| Authentication | NOT STARTED | |
-| Job submission API | NOT STARTED | |
-| Job retrieval API | NOT STARTED | |
-| Transactional outbox | NOT STARTED | |
-| RabbitMQ publisher | NOT STARTED | |
 | RabbitMQ consumer | IMPLEMENTED | Minimal consumer with manual ack and DLQ routing |
-| Redis rate limiting | NOT STARTED | |
+| Redis rate limiting | IMPLEMENTED | Sliding window algorithm using Redis sorted sets (ZSET) via atomic Lua script |
 | Redis heartbeat | IMPLEMENTED | worker:{workerId}:heartbeat with 10s TTL and 3s refresh |
 | Job execution | NOT STARTED | |
 | Idempotency | NOT STARTED | |
-<<<<<<< HEAD
-| Retry mechanism | NOT STARTED | |
-| Dead Letter Queue | NOT STARTED | |
-| Worker recovery | NOT STARTED | |
-| Pino logging | IMPLEMENTED | Structured JSON logging with Pino, request correlation via X-Request-Id, pino-pretty in dev |
-| Prometheus metrics | NOT STARTED | |
-| Grafana dashboards | NOT STARTED | |
-=======
 | Retry mechanism | IN PROGRESS | Topology configured with delay/retry queue |
 | Dead Letter Queue | IMPLEMENTED | jobs.dlx and jobs.dlq configured and bound |
 | Worker recovery | IN PROGRESS | Graceful shutdown and unacked redelivery foundations |
-| Pino logging | IMPLEMENTED | Structured logger with workerId and component tagging |
+| Pino logging | IMPLEMENTED | API (X-Request-Id correlation) & Worker (workerId & component tagging) |
 | Prometheus metrics | IN PROGRESS | Container & scrape config created in Docker Compose |
 | Grafana dashboards | IN PROGRESS | Container & Prometheus datasource auto-provisioned |
->>>>>>> origin/main
 | React dashboard | NOT STARTED | |
 | k6 load tests | NOT STARTED | |
 | Integration tests | NOT STARTED | |
@@ -264,33 +248,36 @@ Document actual keys and their purpose.
 
 | Key Pattern | Purpose | TTL | Status |
 |---|---|---|---|
-| `ratelimit:{userId}` | API rate limiting | TBD | NOT STARTED |
+| `ratelimit:{identifier}` | API rate limiting (Sliding window ZSET) | Window duration (`PEXPIRE windowMs`) | IMPLEMENTED |
 | `worker:{workerId}:heartbeat` | Worker heartbeat and liveness tracking | 10s | IMPLEMENTED |
 
 Document:
-- Key format: `worker:{workerId}:heartbeat`
-- TTL behaviour: Set to 10 seconds, refreshed every 3 seconds while worker is healthy.
-- Stale worker detection: If a worker crashes or becomes partitioned, the key automatically expires after 10s, marking the worker dead.
-- Atomic operations: Single `SET key value EX 10` atomic command.
-- Payload: JSON with `workerId`, `status: 'alive'`, `timestamp`, `uptimeSeconds`, `concurrency`.
-- Graceful exit: On controlled shutdown, the worker explicitly deletes its key (`DEL worker:{workerId}:heartbeat`).
+- Key format:
+  - `ratelimit:{identifier}`: API rate limiting where identifier is IP address (or future `userId`/`apiKey`).
+  - `worker:{workerId}:heartbeat`: Worker liveness tracking.
+- Rate limiting algorithm: Sliding window counter using Redis sorted sets (`ZSET`) and an atomic Lua script (`SLIDING_WINDOW_LUA`).
+  - Score: Unix timestamp in milliseconds (`now`).
+  - Member: `${now}:${uuid}` token to ensure unique entries.
+  - Step 1: `ZREMRANGEBYSCORE key -inf (now - windowMs)` removes expired requests outside the window.
+  - Step 2: `ZCARD key` retrieves the current request count.
+  - Step 3: If `count < maxLimit`, `ZADD key now member` and `PEXPIRE key windowMs` registers the request and refreshes key TTL.
+  - Step 4: If limit exceeded, calculates `Retry-After` using `ZRANGE key 0 0 WITHSCORES` (time until oldest request slides out).
+  - Failure Fallback: Fails open if Redis is down, logging a warning and returning `allowed: true` so a Redis failure does not bring down the entire API.
+- Heartbeat behaviour:
+  - Set to 10 seconds, refreshed every 3 seconds while worker is healthy.
+  - Stale worker detection: If a worker crashes or becomes partitioned, the key automatically expires after 10s, marking the worker dead.
+  - Atomic operations: Single `SET key value EX 10` atomic command.
+  - Payload: JSON with `workerId`, `status: 'alive'`, `timestamp`, `uptimeSeconds`, `concurrency`.
+  - Graceful exit: On controlled shutdown, the worker explicitly deletes its key (`DEL worker:{workerId}:heartbeat`).
 
 ## 11. Observability State
 
 ### Pino
-<<<<<<< HEAD
-- **Logger Configuration:** [api/src/config/logger.ts](file:///c:/Users/user/OneDrive/Desktop/Distributed%20Job%20Processing/api/src/config/logger.ts) with ISO timestamps, service identification (`service: job-platform-api`), environment tagging, and `pino-pretty` formatting for local development. In production, outputs high-performance structured JSON.
+- **API Logger Configuration:** [api/src/config/logger.ts](file:///c:/Users/user/OneDrive/Desktop/Distributed%20Job%20Processing/api/src/config/logger.ts) with ISO timestamps, service identification (`service: job-platform-api`), environment tagging, and `pino-pretty` formatting for local development. In production, outputs high-performance structured JSON.
+- **Worker Logger Configuration:** [worker/src/logger/logger.ts](file:///c:/Users/user/OneDrive/Desktop/Distributed%20Job%20Processing/worker/src/logger/logger.ts) with base metadata (`service: job-platform-worker`, `workerId`). Component loggers created via `createComponentLogger(component)` (`Lifecycle`, `RabbitMQ`, `Consumer`, `Heartbeat`).
 - **Log Levels:** Configurable via `LOG_LEVEL` environment variable (`trace`, `debug`, `info`, `warn`, `error`, `fatal`), defaults to `info`.
 - **Request Correlation:** Handled by [api/src/middlewares/request-logger.middleware.ts](file:///c:/Users/user/OneDrive/Desktop/Distributed%20Job%20Processing/api/src/middlewares/request-logger.middleware.ts). Reuses client-provided `X-Request-Id` or generates a UUID v4. Attaches `req.id`, sets `X-Request-Id` response header, and injects a child logger `req.log` with `{ requestId }` bound to every log entry for the lifecycle of that request.
-- **Log Levels by Status Code:** 2xx/3xx logged as `info`, 4xx as `warn`, 5xx as `error`. Error middleware captures stack traces and links them to the originating `requestId`.
-=======
-- Logger configuration: Pino with `pino-pretty` in development and raw JSON in production.
-- Base metadata attached automatically: `service: 'job-platform-worker'`, `workerId`.
-- Log levels: `trace`, `debug`, `info`, `warn`, `error`, `fatal` (default: `info`, configurable via `LOG_LEVEL`).
-- Worker identification: Generated via `crypto.randomUUID()` (`worker-{uuid}`) or injected via `WORKER_ID` environment variable.
-- Component correlation: Attached via `createComponentLogger(component)` (`Lifecycle`, `RabbitMQ`, `Consumer`).
-- Job correlation: `jobId` and `attempt` attached to job consumption log records.
->>>>>>> origin/main
+- **Job Correlation:** `jobId` and `attempt` attached to job consumption and outbox log records.
 
 ### Prometheus
 Document actual metric names, types and labels.

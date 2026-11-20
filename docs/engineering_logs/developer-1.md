@@ -51,30 +51,45 @@ Status: IN PROGRESS
 - [x] Connect PostgreSQL.
 - [x] Define initial database models.
 - [x] Implement Pino request logging middleware.
-- [ ] Implement Redis rate-limiter proof of concept.
+- [x] Implement Redis rate-limiter proof of concept.
 - [x] Verify API health endpoint.
-- [ ] Test Redis increment and TTL behaviour.
+- [x] Test Redis increment and TTL behaviour.
 
 #### Implementation Record
 
 Features implemented:
-- Strict environment variable schema validation using Zod (`api/src/config/env.ts`) ensuring PORT, NODE_ENV, and DATABASE_URL are valid on startup.
+- Strict environment variable schema validation using Zod (`api/src/config/env.ts`) ensuring PORT, NODE_ENV, DATABASE_URL, and REDIS_URL are valid on startup.
 - Prisma ORM initialization and schema definition (`api/prisma/schema.prisma`) with models: `User`, `Job`, `JobAttempt`, `IdempotencyRecord`, `OutboxEvent`.
 - Singleton Prisma client wrapper with connection management (`connectDatabase`, `disconnectDatabase` in `api/src/config/prisma.ts`).
-- Server graceful shutdown integration with Prisma disconnect in `api/src/index.ts`.
-- Database connectivity status in `/health` route.
+- Server graceful shutdown integration with Prisma and Redis disconnect in `api/src/index.ts`.
+- Pino structured request logging middleware with automatic `X-Request-Id` correlation, request timing, status-aware log levels, and error handling.
+- Redis connection singleton (`api/src/config/redis.ts`) with retry strategy and lifecycle logging.
+- Atomic Redis sliding window rate limiter service (`api/src/services/rate-limiter.service.ts`) using sorted sets (`ZSET`) and Lua script (`SLIDING_WINDOW_LUA`).
+- Express rate-limiter middleware (`api/src/middlewares/rate-limiter.middleware.ts`) injecting `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and `Retry-After` headers.
+- Comprehensive proof-of-concept verification script (`api/src/services/verify-rate-limiter.poc.ts`).
+- Multi-dependency health probe in `/health` checking both PostgreSQL and Redis connectivity.
 
 Files created:
 - `api/prisma/schema.prisma`
 - `api/src/config/prisma.ts`
+- `api/src/config/logger.ts`
+- `api/src/config/redis.ts`
+- `api/src/types/express.d.ts`
+- `api/src/middlewares/request-logger.middleware.ts`
+- `api/src/middlewares/rate-limiter.middleware.ts`
+- `api/src/services/rate-limiter.service.ts`
+- `api/src/services/verify-rate-limiter.poc.ts`
 
 Files modified:
 - `api/src/config/env.ts`
 - `api/src/index.ts`
+- `api/src/app.ts`
 - `api/src/routes/health.route.ts`
+- `api/src/middlewares/error.middleware.ts`
 - `api/package.json`
 - `api/.env`
 - `api/.env.example`
+- `docs/DECISIONS.md`
 
 Important functions:
 - `connectDatabase()`: tests PostgreSQL connection via Prisma `$connect()`.

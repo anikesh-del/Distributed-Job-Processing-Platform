@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { config } from './config/env';
 import { logger } from './config/logger';
 import { connectDatabase, disconnectDatabase } from './config/prisma';
+import { connectRedis, disconnectRedis } from './config/redis';
 
 const app = createApp();
 
@@ -10,7 +11,7 @@ const server = app.listen(config.port, async () => {
     { port: config.port, nodeEnv: config.nodeEnv },
     `Server listening on port ${config.port} in ${config.nodeEnv} mode`
   );
-  await connectDatabase();
+  await Promise.all([connectDatabase(), connectRedis()]);
 });
 
 // Graceful shutdown handling
@@ -24,7 +25,7 @@ async function handleShutdown(signal: string): Promise<void> {
       logger.info('HTTP server closed cleanly');
     }
 
-    await disconnectDatabase();
+    await Promise.all([disconnectDatabase(), disconnectRedis()]);
     process.exit(err ? 1 : 0);
   });
 

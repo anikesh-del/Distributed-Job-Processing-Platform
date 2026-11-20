@@ -20,6 +20,10 @@ const envSchema = z.object({
     .string()
     .url({ message: 'DATABASE_URL must be a valid PostgreSQL connection URL' })
     .default('postgresql://postgres:postgres@localhost:5432/job_platform?schema=public'),
+  REDIS_URL: z
+    .string()
+    .url({ message: 'REDIS_URL must be a valid Redis connection URL' })
+    .default('redis://localhost:6379'),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
@@ -37,6 +41,7 @@ export const config = {
   port: parsed.data.PORT,
   nodeEnv: parsed.data.NODE_ENV,
   databaseUrl: parsed.data.DATABASE_URL,
+  redisUrl: parsed.data.REDIS_URL,
   logLevel: parsed.data.LOG_LEVEL,
 } as const;
 
