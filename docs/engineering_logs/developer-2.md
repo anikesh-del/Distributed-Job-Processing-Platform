@@ -21,70 +21,176 @@ Important: Primary ownership does not mean exclusive ownership. Developer 2 must
 
 ## 2. Current Development Status
 
-Current development day: NOT STARTED
+Current development day: Day 1 — Foundations (Completed)
 
-Overall status: NOT STARTED
+Overall status: DAY 1 COMPLETE
 
-Last updated: YYYY-MM-DD
+Last updated: 2026-11-20
 
-Current focus:
+Current focus: Day 1 Complete. Ready for Day 2 Worker Execution.
 
 Completed tasks:
+- Worker application skeleton and TypeScript config extending root tsconfig.base.json.
+- RabbitMQ connection management, topology setup (main, retry, DLQ), and prefetch configuration.
+- Minimal consumer with manual acknowledgement (`ack`) and failure routing (`nack` to DLQ).
+- Structured logging setup with Pino, automatic unique `workerId` tagging, and contextual child loggers.
+- Redis client and heartbeat service with periodic TTL pulses and clean exit cleanup.
+- Docker Compose foundation with PostgreSQL, RabbitMQ, Redis, Prometheus, and auto-provisioned Grafana.
 
-In-progress tasks:
+In-progress tasks: None (Day 1 completed).
 
 Pending tasks:
+- Day 2 tasks (Worker execution, database integration, message envelope validation).
 
-Blocked tasks:
+Blocked tasks: None
 
 ## 3. Daily Implementation Log
 
 ### Day 1 — Foundations
 
-Status: NOT STARTED
+Status: COMPLETED
 
 #### Tasks
 
-- [ ] Create worker application.
-- [ ] Configure shared TypeScript configuration.
-- [ ] Connect worker to RabbitMQ.
-- [ ] Define exchange topology.
-- [ ] Define durable queues.
-- [ ] Define routing keys.
-- [ ] Configure dead-letter exchange and queue.
-- [ ] Implement a minimal consumer.
-- [ ] Implement manual acknowledgement for test messages.
-- [ ] Implement Pino worker logging.
-- [ ] Generate workerId.
-- [ ] Implement Redis heartbeat proof of concept.
-- [ ] Verify heartbeat TTL and expiry.
-- [ ] Start Prometheus and Grafana containers.
+- [x] Create worker application.
+- [x] Configure shared TypeScript configuration.
+- [x] Connect worker to RabbitMQ.
+- [x] Define exchange topology.
+- [x] Define durable queues.
+- [x] Define routing keys.
+- [x] Configure dead-letter exchange and queue.
+- [x] Implement a minimal consumer.
+- [x] Implement manual acknowledgement for test messages.
+- [x] Implement Pino worker logging.
+- [x] Generate workerId.
+- [x] Implement Redis heartbeat proof of concept.
+- [x] Verify heartbeat TTL and expiry.
+- [x] Start Prometheus and Grafana containers.
 
 #### Implementation Record
 
 Features implemented:
+- Worker application skeleton (`worker/`).
+- TypeScript setup extending `tsconfig.base.json` (`worker/tsconfig.json`).
+- Environment variable configuration (`worker/src/config/env.ts` and `worker/.env.example`).
+- Process lifecycle entrypoint with graceful shutdown handling (`worker/src/index.ts`).
+- Installed `amqplib` and `@types/amqplib`.
+- RabbitMQ connection management with error and close event handlers.
+- Prefetch configuration matching worker concurrency (`ch.prefetch(prefetchCount)`).
+- Complete RabbitMQ topology configuration:
+  - Main Exchange (`jobs.exchange`, direct, durable)
+  - Main Queue (`jobs.main`, durable) routing key `jobs.dispatch`, with `deadLetterExchange: jobs.dlx` and `deadLetterRoutingKey: jobs.dead`
+  - Retry Exchange (`jobs.retry.exchange`, direct, durable)
+  - Retry Queue (`jobs.retry`, durable) routing key `jobs.retry`, with dead letter routing back to `jobs.exchange` / `jobs.dispatch` on TTL expiry
+  - Dead Letter Exchange (`jobs.dlx`, direct, durable)
+  - Dead Letter Queue (`jobs.dlq`, durable) routing key `jobs.dead`
+- Graceful connection teardown (`closeRabbitMQ`) cleanly closing channel and connection.
+- Minimal consumer on `jobs.main` queue (`worker/src/consumer/job.consumer.ts`).
+- Explicit manual acknowledgement (`channel.ack(msg)` with `{ noAck: false }`).
+- Error rejection with DLQ routing (`channel.nack(msg, false, false)`).
+- Consumer cancellation on graceful shutdown (`channel.cancel(activeConsumerTag)`).
+- Structured logging setup with `pino` and `pino-pretty` (`worker/src/logger/logger.ts`).
+- Automatic unique `workerId` generation (via `crypto.randomUUID()`) or environment injection.
+- Base log metadata attachment (`service: 'job-platform-worker'`, `workerId`).
+- Contextual child logger creator (`createComponentLogger`) with `component` labels.
+- Replaced all raw console output with structured contextual logger calls across the worker.
+- Installed `ioredis` for worker operational state tracking.
+- Redis client singleton (`worker/src/redis/redis.client.ts`) with lifecycle management.
+- Heartbeat service (`worker/src/heartbeat/heartbeat.service.ts`):
+  - Sends atomic `SET worker:{workerId}:heartbeat <payload> EX 10`.
+  - Refreshes heartbeat every 3 seconds (`unref` timer).
+  - Explicitly cleans up heartbeat key on graceful shutdown.
+- Heartbeat verification script (`worker/src/heartbeat/verify-heartbeat.poc.ts`) runnable via `npm run poc:heartbeat`.
+- Root Docker Compose infrastructure (`docker-compose.yml`) containing PostgreSQL, RabbitMQ, Redis, Prometheus, and Grafana.
+- Prometheus configuration (`docker/prometheus/prometheus.yml`) with scraping targets for Prometheus, API, and Worker.
+- Grafana datasource auto-provisioning (`docker/grafana/provisioning/datasources/prometheus.yml`).
 
 Files created:
+- `worker/package.json`
+- `worker/tsconfig.json`
+- `worker/.env.example`
+- `worker/src/config/env.ts`
+- `worker/src/index.ts`
+- `worker/src/constants/rabbitmq.ts`
+- `worker/src/queue/rabbitmq.ts`
+- `worker/src/consumer/job.consumer.ts`
+- `worker/src/logger/logger.ts`
+- `worker/src/redis/redis.client.ts`
+- `worker/src/heartbeat/heartbeat.service.ts`
+- `worker/src/heartbeat/verify-heartbeat.poc.ts`
+- `docker-compose.yml`
+- `docker/prometheus/prometheus.yml`
+- `docker/grafana/provisioning/datasources/prometheus.yml`
 
 Files modified:
+- `worker/package.json`
+- `worker/.env.example`
+- `worker/src/config/env.ts`
+- `worker/src/index.ts`
+- `worker/src/queue/rabbitmq.ts`
+- `worker/src/consumer/job.consumer.ts`
+- `docs/engineering_logs/developer-2.md`
+- `docs/DECISIONS.md`
 
 Important functions:
+- `connectRedis()` & `closeRedis()`: Manages Redis client connection and clean shutdown.
+- `sendHeartbeat(redis)`: Performs atomic `SET worker:{workerId}:heartbeat payload EX 10`.
+- `startHeartbeat(redis)`: Initiates the 3-second periodic refresh loop.
+- `stopHeartbeat(redis)`: Clears timer and deletes heartbeat key on graceful exit.
+- `createComponentLogger(component)`: Returns a child Pino logger with bound component name.
+- `workerId`: Unique worker process identifier attached to every log record.
+- `connectRabbitMQ(url, prefetchCount)`: Connects to broker, creates channel, configures prefetch, and initializes topology.
+- `setupTopology(ch)`: Asserts exchanges, durable queues, DLQ, retry queues, and their bindings.
+- `startJobConsumer(channel)`: Starts consuming with `{ noAck: false }` for manual message acknowledgement.
+- `handleMessage(channel, msg)`: Inspects incoming payload, processes it, and manually calls `channel.ack(msg)`.
+- `stopJobConsumer(channel)`: Cancels active consumer tag during shutdown before closing channel.
+- `closeRabbitMQ()`: Gracefully closes channel and connection.
+- `handleShutdown(signal)`: Handles SIGINT and SIGTERM for graceful worker process termination, stops consumer, deletes heartbeat, and closes connections.
 
 RabbitMQ configuration:
+- Main Exchange: `jobs.exchange` (direct, durable)
+- Main Queue: `jobs.main` (durable)
+- Dispatch Routing Key: `jobs.dispatch`
+- Retry Exchange: `jobs.retry.exchange` (direct, durable)
+- Retry Queue: `jobs.retry` (durable, deadLetterExchange: `jobs.exchange`, deadLetterRoutingKey: `jobs.dispatch`)
+- Retry Routing Key: `jobs.retry`
+- Dead Letter Exchange: `jobs.dlx` (direct, durable)
+- Dead Letter Queue: `jobs.dlq` (durable)
+- Dead Letter Routing Key: `jobs.dead`
 
 Redis keys:
+- Key Pattern: `worker:{workerId}:heartbeat`
+- TTL: 10 seconds (`config.heartbeatTtlSeconds`)
+- Refresh interval: 3 seconds (`config.heartbeatIntervalMs`)
+- Value: JSON `{ workerId, status: 'alive', timestamp, uptimeSeconds, concurrency }`
+- Purpose: Liveness and stale-worker detection without distributed locks.
 
 Technical concepts learned:
+- Standalone service modularity alongside API.
+- TypeScript project inheritance using `tsconfig.base.json`.
+- Node.js graceful termination signals for background workers.
+- AMQP 0-9-1 exchange and queue topology concepts.
+- Dead Letter Exchanges (DLX) for unrecoverable failures.
+- Native TTL dead-lettering backoff pattern for retries without third-party plugins.
 
 Tests executed:
+- `npm run typecheck` (`tsc --noEmit`)
+- `npm run build` (`tsc`)
 
 Actual test results:
+- Typecheck passed with 0 errors.
+- Build succeeded, generating clean JS in `worker/dist`.
 
-Bugs encountered:
+Bugs encountered: None
 
-Fixes applied:
+Fixes applied: None
 
 Remaining work:
+- Implement a minimal consumer with manual acknowledgement.
+- Worker Pino logging and workerId generation.
+- Redis heartbeat proof of concept.
+- Pino structured logging and workerId generation.
+- Redis heartbeat proof of concept.
 
 ---
 
