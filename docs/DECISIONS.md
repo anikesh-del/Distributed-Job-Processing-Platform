@@ -37,12 +37,12 @@ Last updated: YYYY-MM-DD
 
 | Subsystem | Status | Notes |
 |---|---|---|
-| Project setup | NOT STARTED | |
+| Project setup | IN PROGRESS | Express API, env validation, and Prisma configured |
 | Docker Compose | NOT STARTED | |
-| Express API | NOT STARTED | |
-| TypeScript configuration | NOT STARTED | |
-| PostgreSQL | NOT STARTED | |
-| Prisma schema | NOT STARTED | |
+| Express API | IN PROGRESS | Skeleton, health endpoint, graceful shutdown |
+| TypeScript configuration | IMPLEMENTED | Base tsconfig and api tsconfig passing typecheck |
+| PostgreSQL | IMPLEMENTED | Connected and migrated (`20261119162852_init`) |
+| Prisma schema | IMPLEMENTED | Models: User, Job, JobAttempt, IdempotencyRecord, OutboxEvent |
 | Authentication | NOT STARTED | |
 | Job submission API | NOT STARTED | |
 | Job retrieval API | NOT STARTED | |
@@ -56,7 +56,7 @@ Last updated: YYYY-MM-DD
 | Retry mechanism | NOT STARTED | |
 | Dead Letter Queue | NOT STARTED | |
 | Worker recovery | NOT STARTED | |
-| Pino logging | NOT STARTED | |
+| Pino logging | IMPLEMENTED | Structured JSON logging with Pino, request correlation via X-Request-Id, pino-pretty in dev |
 | Prometheus metrics | NOT STARTED | |
 | Grafana dashboards | NOT STARTED | |
 | React dashboard | NOT STARTED | |
@@ -195,25 +195,26 @@ For each implemented endpoint, document:
 
 ## 8. Database Schema State
 
-Expected core entities:
+### Migration: `20261119162852_init`
+- **Status:** IMPLEMENTED & VERIFIED
+- **Date:** 2026-11-19
+- **Database:** PostgreSQL (`job_platform`)
 
-- User
-- Job
-- JobAttempt
-- IdempotencyRecord (or an approved equivalent)
-- OutboxEvent
-
-Record the actual approved schema here.
-
-For every significant schema change, document:
-- Model changes.
-- Relationships.
-- Unique constraints.
-- Indexes.
-- Migration name.
-- Migration verification.
-
-Never describe an expected schema as implemented before it exists.
+#### Implemented Tables:
+1. **`users`**
+   - Fields: `id` (UUID PK), `email` (unique), `password_hash`, `api_key` (unique), `created_at`, `updated_at`.
+2. **`jobs`**
+   - Fields: `id` (UUID PK), `user_id` (FK -> `users.id`), `type`, `payload` (JSONB), `status` (`JobStatus` enum), `priority`, `max_retries`, `retry_count`, `idempotency_key` (unique), `created_at`, `updated_at`.
+   - Indexes: `status`, `user_id`.
+3. **`job_attempts`**
+   - Fields: `id` (UUID PK), `job_id` (FK -> `jobs.id`), `attempt_num`, `status` (`JobStatus` enum), `error`, `started_at`, `finished_at`.
+   - Indexes: `job_id`.
+4. **`idempotency_records`**
+   - Fields: `id` (UUID PK), `idempotency_key` (unique), `response_status`, `response_body` (JSONB), `created_at`, `expires_at`.
+   - Indexes: `idempotency_key`.
+5. **`outbox_events`**
+   - Fields: `id` (UUID PK), `job_id` (FK -> `jobs.id`), `event_type`, `payload` (JSONB), `status` (`OutboxStatus` enum), `retry_count`, `created_at`, `published_at`.
+   - Indexes: `status`.
 
 ## 9. RabbitMQ Configuration State
 
@@ -257,12 +258,10 @@ Document:
 ## 11. Observability State
 
 ### Pino
-Document actual:
-- Logger configuration.
-- Log levels.
-- Request correlation.
-- Job correlation.
-- Worker identification.
+- **Logger Configuration:** [api/src/config/logger.ts](file:///c:/Users/user/OneDrive/Desktop/Distributed%20Job%20Processing/api/src/config/logger.ts) with ISO timestamps, service identification (`service: job-platform-api`), environment tagging, and `pino-pretty` formatting for local development. In production, outputs high-performance structured JSON.
+- **Log Levels:** Configurable via `LOG_LEVEL` environment variable (`trace`, `debug`, `info`, `warn`, `error`, `fatal`), defaults to `info`.
+- **Request Correlation:** Handled by [api/src/middlewares/request-logger.middleware.ts](file:///c:/Users/user/OneDrive/Desktop/Distributed%20Job%20Processing/api/src/middlewares/request-logger.middleware.ts). Reuses client-provided `X-Request-Id` or generates a UUID v4. Attaches `req.id`, sets `X-Request-Id` response header, and injects a child logger `req.log` with `{ requestId }` bound to every log entry for the lifecycle of that request.
+- **Log Levels by Status Code:** 2xx/3xx logged as `info`, 4xx as `warn`, 5xx as `error`. Error middleware captures stack traces and links them to the originating `requestId`.
 
 ### Prometheus
 Document actual metric names, types and labels.

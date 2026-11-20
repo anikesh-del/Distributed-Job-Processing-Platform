@@ -41,41 +41,68 @@ Use this section to record every meaningful implementation task.
 
 ### Day 1 — Foundations
 
-Status: NOT STARTED
+Status: IN PROGRESS
 
 #### Tasks
 
-- [ ] Create Express + TypeScript API skeleton.
-- [ ] Configure environment validation.
-- [ ] Configure Prisma.
-- [ ] Connect PostgreSQL.
-- [ ] Define initial database models.
-- [ ] Implement Pino request logging middleware.
+- [x] Create Express + TypeScript API skeleton.
+- [x] Configure environment validation.
+- [x] Configure Prisma.
+- [x] Connect PostgreSQL.
+- [x] Define initial database models.
+- [x] Implement Pino request logging middleware.
 - [ ] Implement Redis rate-limiter proof of concept.
-- [ ] Verify API health endpoint.
+- [x] Verify API health endpoint.
 - [ ] Test Redis increment and TTL behaviour.
 
 #### Implementation Record
 
 Features implemented:
+- Strict environment variable schema validation using Zod (`api/src/config/env.ts`) ensuring PORT, NODE_ENV, and DATABASE_URL are valid on startup.
+- Prisma ORM initialization and schema definition (`api/prisma/schema.prisma`) with models: `User`, `Job`, `JobAttempt`, `IdempotencyRecord`, `OutboxEvent`.
+- Singleton Prisma client wrapper with connection management (`connectDatabase`, `disconnectDatabase` in `api/src/config/prisma.ts`).
+- Server graceful shutdown integration with Prisma disconnect in `api/src/index.ts`.
+- Database connectivity status in `/health` route.
 
 Files created:
+- `api/prisma/schema.prisma`
+- `api/src/config/prisma.ts`
 
 Files modified:
+- `api/src/config/env.ts`
+- `api/src/index.ts`
+- `api/src/routes/health.route.ts`
+- `api/package.json`
+- `api/.env`
+- `api/.env.example`
 
 Important functions:
+- `connectDatabase()`: tests PostgreSQL connection via Prisma `$connect()`.
+- `disconnectDatabase()`: gracefully closes Prisma connection on SIGINT/SIGTERM.
+- `envSchema.safeParse()`: validates and formats runtime environment variables at boot.
 
 Technical concepts learned:
+- Fail-fast configuration pattern using Zod schemas at application entry.
+- Safe singleton pattern for PrismaClient in development to prevent connection pooling exhaustion during hot reloads.
+- Graceful shutdown lifecycle: draining incoming HTTP requests, then disconnecting database clients cleanly before process exit.
 
 Tests executed:
+- `npm run typecheck` (`tsc --noEmit`): Clean type verification.
+- `npm run build` (`tsc`): Clean compilation to `dist/`.
 
 Actual test results:
+- All TypeScript types and Prisma generated clients compiled without error.
 
 Bugs encountered:
+- Node v24 ESM loader issues when invoking experimental `prisma` CLI; solved by pinning stable Prisma ORM v6 (`@prisma/client@^6` and `prisma@^6`).
 
 Fixes applied:
+- Replaced experimental CLI with stable `@prisma/client@^6` and generated the client successfully.
 
 Remaining work:
+- Run PostgreSQL via Docker Compose or local instance and verify active connection.
+- Implement Pino request logging middleware.
+- Implement Redis rate-limiter proof of concept.
 
 ---
 

@@ -1,28 +1,36 @@
 import { createApp } from './app';
 import { config } from './config/env';
+import { logger } from './config/logger';
+import { connectDatabase, disconnectDatabase } from './config/prisma';
 
 const app = createApp();
 
-const server = app.listen(config.port, () => {
-  console.log(`[API] Server listening on port ${config.port} in ${config.nodeEnv} mode`);
+const server = app.listen(config.port, async () => {
+  logger.info(
+    { port: config.port, nodeEnv: config.nodeEnv },
+    `Server listening on port ${config.port} in ${config.nodeEnv} mode`
+  );
+  await connectDatabase();
 });
 
 // Graceful shutdown handling
-function handleShutdown(signal: string): void {
-  console.log(`[API] Received ${signal}. Starting graceful shutdown...`);
+async function handleShutdown(signal: string): Promise<void> {
+  logger.info({ signal }, `Received ${signal}. Starting graceful shutdown...`);
 
-  server.close((err) => {
+  server.close(async (err) => {
     if (err) {
-      console.error('[API] Error during server close:', err);
-      process.exit(1);
+      logger.error({ err }, 'Error during server close');
+    } else {
+      logger.info('HTTP server closed cleanly');
     }
-    console.log('[API] Server closed cleanly.');
-    process.exit(0);
+
+    await disconnectDatabase();
+    process.exit(err ? 1 : 0);
   });
 
   // Force shutdown after timeout if pending connections don't drain
   setTimeout(() => {
-    console.error('[API] Forcing shutdown after timeout.');
+    logger.fatal('Forcing shutdown after timeout');
     process.exit(1);
   }, 10000).unref();
 }

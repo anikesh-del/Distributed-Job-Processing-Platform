@@ -1,0 +1,100 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+}
+
+enum OutboxStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  apiKey       String?  @unique @map("api_key")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  jobs         Job[]
+
+  @@map("users")
+}
+
+model Job {
+  id             String       @id @default(uuid())
+  userId         String       @map("user_id")
+  type           String
+  payload        Json
+  status         JobStatus    @default(PENDING)
+  priority       Int          @default(0)
+  maxRetries     Int          @default(3) @map("max_retries")
+  retryCount     Int          @default(0) @map("retry_count")
+  idempotencyKey String?      @unique @map("idempotency_key")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts       JobAttempt[]
+  outboxEvents   OutboxEvent[]
+
+  @@index([status])
+  @@index([userId])
+  @@map("jobs")
+}
+
+model JobAttempt {
+  id         String    @id @default(uuid())
+  jobId      String    @map("job_id")
+  attemptNum Int       @map("attempt_num")
+  status     JobStatus
+  error      String?
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@map("job_attempts")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  idempotencyKey String   @unique @map("idempotency_key")
+  responseStatus Int      @map("response_status")
+  responseBody   Json     @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at")
+  expiresAt      DateTime @map("expires_at")
+
+  @@index([idempotencyKey])
+  @@map("idempotency_records")
+}
+
+model OutboxEvent {
+  id          String       @id @default(uuid())
+  jobId       String       @map("job_id")
+  eventType   String       @map("event_type")
+  payload     Json
+  status      OutboxStatus @default(PENDING)
+  retryCount  Int          @default(0) @map("retry_count")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  publishedAt DateTime?    @map("published_at")
+
+  job         Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("outbox_events")
+}
